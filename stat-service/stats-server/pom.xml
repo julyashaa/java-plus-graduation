@@ -5,14 +5,14 @@
 
     <parent>
         <groupId>ru.practicum</groupId>
-        <artifactId>stat-service</artifactId>
+        <artifactId>stats-service</artifactId>
         <version>0.0.1-SNAPSHOT</version>
     </parent>
 
-    <artifactId>stat-server</artifactId>
+    <artifactId>stats-server</artifactId>
     <packaging>jar</packaging>
 
-    <name>stat-server</name>
+    <name>stats-server</name>
 
     <properties>
         <mapstruct.version>1.5.5.Final</mapstruct.version>
