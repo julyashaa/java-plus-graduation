@@ -8,7 +8,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.practicum.category.dto.CategoryDto;
 import ru.practicum.category.service.CategoryService;
-import ru.practicum.client.ClientForStat;
 import ru.practicum.client.RestStatClient;
 import ru.practicum.dto.ViewStatsDto;
 import ru.practicum.event.dto.*;
@@ -44,7 +43,6 @@ public class EventService {
     private final UserService userService;
     private final CategoryService categoryService;
     private final RequestService requestService;
-    private final ClientForStat client;
     private final RestStatClient restStatClient;
 
     @Transactional
