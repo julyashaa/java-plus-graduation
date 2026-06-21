@@ -2,7 +2,6 @@ package ru.practicum.server.repository;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.stereotype.Repository;
 import ru.practicum.dto.ViewStatsDto;
 import ru.practicum.server.model.EndpointHit;
 import ru.practicum.server.repository.query.StatQueries;
@@ -10,7 +9,6 @@ import ru.practicum.server.repository.query.StatQueries;
 import java.time.LocalDateTime;
 import java.util.List;
 
-@Repository
 public interface StatRepository extends JpaRepository<EndpointHit, Long> {
 
     @Query(StatQueries.STATS)

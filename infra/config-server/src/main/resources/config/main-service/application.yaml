@@ -36,3 +36,6 @@ eureka:
   instance:
     prefer-ip-address: true
     instance-id: ${spring.application.name}:${random.value}
+
+stats:
+  service-id: stats-server

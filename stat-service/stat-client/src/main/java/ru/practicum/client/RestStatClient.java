@@ -1,15 +1,15 @@
 package ru.practicum.client;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.cloud.client.ServiceInstance;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriBuilder;
+import ru.practicum.client.exception.StatClientException;
 import ru.practicum.dto.EndpointHitDto;
 import ru.practicum.dto.ViewStatsDto;
-import org.springframework.cloud.client.discovery.DiscoveryClient;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -23,9 +23,10 @@ import static ru.practicum.constants.DatePatternConstant.DATE_TIME_PATTERN;
 public class RestStatClient implements StatClient {
 
     private final RestClient.Builder restClientBuilder;
-    private final DiscoveryClient discoveryClient;
 
-    private static final String STATS_SERVER = "stats-server";
+    @Value("${stats.service-id}")
+    private String statsServiceId;
+
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern(DATE_TIME_PATTERN);
 
     @Override
@@ -37,7 +38,7 @@ public class RestStatClient implements StatClient {
                     .retrieve()
                     .toBodilessEntity();
         } catch (Exception e) {
-            throw new RuntimeException("Ошибка сохранения статистики", e);
+            throw new StatClientException("Ошибка сохранения статистики", e);
         }
     }
 
@@ -53,9 +54,11 @@ public class RestStatClient implements StatClient {
                         if (uris != null && !uris.isEmpty()) {
                             builder.queryParam("uris", uris);
                         }
+
                         if (unique != null) {
                             builder.queryParam("unique", unique);
                         }
+
                         return builder.build();
                     })
                     .retrieve()
@@ -63,7 +66,7 @@ public class RestStatClient implements StatClient {
 
             return response.getBody() != null ? response.getBody() : Collections.emptyList();
         } catch (Exception e) {
-            throw new RuntimeException("Ошибка получения статистики", e);
+            throw new StatClientException("Ошибка получения статистики", e);
         }
     }
 
@@ -77,9 +80,11 @@ public class RestStatClient implements StatClient {
                         if (uris != null && !uris.isEmpty()) {
                             builder.queryParam("uris", uris);
                         }
+
                         if (unique != null) {
                             builder.queryParam("unique", unique);
                         }
+
                         return builder.build();
                     })
                     .retrieve()
@@ -87,19 +92,13 @@ public class RestStatClient implements StatClient {
 
             return response.getBody() != null ? response.getBody() : Collections.emptyList();
         } catch (Exception e) {
-            throw new RuntimeException("Ошибка получения всей статистики", e);
+            throw new StatClientException("Ошибка получения всей статистики", e);
         }
     }
 
     private RestClient getRestClient() {
-        List<ServiceInstance> instances = discoveryClient.getInstances(STATS_SERVER);
-
-        if (instances.isEmpty()) {
-            throw new RuntimeException("Сервис статистики не найден в Eureka");
-        }
-
         return restClientBuilder
-                .baseUrl(instances.getFirst().getUri().toString())
+                .baseUrl("http://" + statsServiceId)
                 .build();
     }
 }

@@ -2,6 +2,7 @@ package ru.practicum.server.service;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import ru.practicum.dto.EndpointHitDto;
 import ru.practicum.dto.ViewStatsDto;
 import ru.practicum.server.exception.BadRequestException;
@@ -17,6 +18,7 @@ import static ru.practicum.constants.DatePatternConstant.DATE_TIME_PATTERN;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class StatService {
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern(DATE_TIME_PATTERN);
@@ -24,6 +26,7 @@ public class StatService {
     private final StatMapper statMapper;
     private final StatRepository statRepository;
 
+    @Transactional
     public void saveHit(EndpointHitDto hitDto) {
         EndpointHit hit = statMapper.toEntity(hitDto);
         statRepository.save(hit);
