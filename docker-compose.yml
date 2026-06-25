@@ -18,3 +18,43 @@ services:
       POSTGRES_PASSWORD: password
     ports:
       - "5433:5432"
+
+  user-db:
+    image: postgres:16.1
+    container_name: user-postgres
+    environment:
+      POSTGRES_DB: users
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5434:5432"
+
+  event-db:
+    image: postgres:16.1
+    container_name: event-postgres
+    environment:
+      POSTGRES_DB: events
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5435:5432"
+
+  request-db:
+    image: postgres:16.1
+    container_name: request-postgres
+    environment:
+      POSTGRES_DB: requests
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5436:5432"
+
+  comment-db:
+    image: postgres:16.1
+    container_name: comment-postgres
+    environment:
+      POSTGRES_DB: comments
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5437:5432"

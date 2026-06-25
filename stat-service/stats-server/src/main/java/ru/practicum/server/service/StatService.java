@@ -39,6 +39,11 @@ public class StatService {
         if (startTime.isAfter(endTime)) {
             throw new BadRequestException("Конец интервала не может быть раньше начала");
         }
+
+        if (uris != null && uris.isEmpty()) {
+            uris = null;
+        }
+
         if (unique) {
             return statRepository.getUniqueStats(startTime, endTime, uris);
         } else {

@@ -5,10 +5,25 @@ spring:
   cloud:
     gateway:
       routes:
-        - id: main-service
-          uri: lb://main-service
+        - id: user-service
+          uri: lb://user-service
           predicates:
-            - Path=/admin/**,/users/**,/events/**,/categories/**,/compilations/**
+            - Path=/admin/users/**
+
+        - id: event-service
+          uri: lb://event-service
+          predicates:
+            - Path=/events/**,/admin/events/**,/users/*/events/**,/categories/**,/admin/categories/**,/compilations/**,/admin/compilations/**
+
+        - id: request-service
+          uri: lb://request-service
+          predicates:
+            - Path=/users/*/requests/**
+
+        - id: comment-service
+          uri: lb://comment-service
+          predicates:
+            - Path=/comments/**,/admin/comments/**,/users/*/comments/**
 
 eureka:
   client:

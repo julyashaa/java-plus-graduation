@@ -1,0 +1,51 @@
+server:
+  port: 0
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5437/comments
+    username: user
+    password: password
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+
+stats:
+  service-id: stats-server
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      eventService:
+        slidingWindowSize: 5
+        minimumNumberOfCalls: 3
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+
+      userService:
+        slidingWindowSize: 5
+        minimumNumberOfCalls: 3
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+
+  retry:
+    instances:
+      eventService:
+        maxAttempts: 3
+        waitDuration: 500ms
+
+      userService:
+        maxAttempts: 3
+        waitDuration: 500ms
