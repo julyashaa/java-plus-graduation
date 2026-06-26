@@ -22,7 +22,7 @@ public interface EventMapper {
     @Mapping(source = "requestModeration", target = "requestModeration")
     @Mapping(source = "createdOn", target = "createdOn")
     @Mapping(source = "state", target = "state")
-    @Mapping(source = "views", target = "views")
+    @Mapping(source = "rating", target = "rating")
     @Mapping(target = "initiator", ignore = true)
     @Mapping(target = "category", ignore = true)
     EventFullDto toFullDto(Event event);

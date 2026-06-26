@@ -8,8 +8,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.practicum.category.dto.CategoryDto;
 import ru.practicum.category.service.CategoryService;
-import ru.practicum.client.RestStatClient;
-import ru.practicum.dto.ViewStatsDto;
+import ru.practicum.client.analyzer.AnalyzerClient;
+import ru.practicum.client.collector.CollectorClient;
 import ru.practicum.event.dto.*;
 import ru.practicum.event.enums.EventState;
 import ru.practicum.event.mapper.EventMapper;
@@ -18,6 +18,8 @@ import ru.practicum.event.repository.EventRepository;
 import ru.practicum.exception.BadRequestException;
 import ru.practicum.exception.ConflictException;
 import ru.practicum.exception.NotFoundException;
+import ru.practicum.grpc.stats.action.ActionTypeProto;
+import ru.practicum.grpc.stats.recommendation.RecommendedEventProto;
 import ru.practicum.user.UserDto;
 import ru.practicum.user.UserShortDto;
 
@@ -38,7 +40,8 @@ public class EventService {
     private final EventMapper eventMapper;
     private final EventRepository eventRepository;
     private final CategoryService categoryService;
-    private final RestStatClient restStatClient;
+    private final AnalyzerClient analyzerClient;
+    private final CollectorClient collectorClient;
     private final EventRemoteService eventRemoteService;
 
     @Transactional
@@ -51,7 +54,7 @@ public class EventService {
         event.setCreatedOn(LocalDateTime.now());
         event.setInitiator(userId);
         event.setState(EventState.PENDING);
-        event.setViews(0L);
+        event.setRating(0.0);
         if (event.getPaid() == null) {
             event.setPaid(false);
         }
@@ -297,10 +300,6 @@ public class EventService {
             events = events.stream()
                     .sorted(Comparator.comparing(Event::getEventDate))
                     .toList();
-        } else if ("VIEWS".equalsIgnoreCase(sort)) {
-            events = events.stream()
-                    .sorted(Comparator.comparing(Event::getViews).reversed())
-                    .toList();
         }
 
         if (from >= events.size()) {
@@ -403,33 +402,53 @@ public class EventService {
     public EventFullDto getPublishedEventById(Long id) {
         log.info("getPublishedEventById - Запрос получения события по его ID = {}", id);
 
-        Optional<Event> optionalEvent = eventRepository.findById(id);
-        if (optionalEvent.isEmpty() || !optionalEvent.get().getState().equals(EventState.PUBLISHED)) {
+        Event event = eventRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Событие с ID=" + id + " не найдено"));
+
+        if (!EventState.PUBLISHED.equals(event.getState())) {
             throw new NotFoundException("Событие с ID=" + id + " не найдено");
-        }
-
-        Event event = optionalEvent.get();
-        List<String> uris = List.of("/events/" + event.getId());
-
-        try {
-            List<ViewStatsDto> stats = restStatClient.getStats(
-                    LocalDateTime.of(2000, 1, 1, 0, 0),
-                    LocalDateTime.of(3000, 1, 1, 0, 0),
-                    uris,
-                    true
-            );
-
-            if (!stats.isEmpty()) {
-                event.setViews(stats.getFirst().getHits());
-            } else {
-                event.setViews(0L);
-            }
-        } catch (Exception e) {
-            log.error("Ошибка запуска сервиса статистики", e);
         }
 
         log.info("Найдено событие: {}", event);
         return fillingFieldsInEventFullDto(event);
+    }
+
+    public List<EventShortDto> getRecommendations(Long userId, int maxResults) {
+        List<Long> eventIds = analyzerClient.getRecommendations(userId, maxResults)
+                .stream()
+                .map(RecommendedEventProto::getEventId)
+                .toList();
+
+        if (eventIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<Event> events = eventRepository.findAllById(eventIds)
+                .stream()
+                .filter(event -> EventState.PUBLISHED.equals(event.getState()))
+                .toList();
+
+        return fillingFieldsInEventShortDtos(events);
+    }
+
+    @Transactional
+    public void likeEvent(Long userId, Long eventId) {
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new NotFoundException("Событие с ID=" + eventId + " не найдено"));
+
+        if (!EventState.PUBLISHED.equals(event.getState())) {
+            throw new BadRequestException("Лайкать можно только опубликованные события");
+        }
+
+        if (!eventRemoteService.isUserConfirmedParticipant(userId, eventId)) {
+            throw new BadRequestException("Пользователь может лайкать только посещённые мероприятия");
+        }
+
+        collectorClient.collectUserAction(
+                userId,
+                eventId,
+                ActionTypeProto.ACTION_LIKE
+        );
     }
 
     private void validatePublish(Event event, UpdateEventAdminRequest request, LocalDateTime now) {
@@ -506,22 +525,50 @@ public class EventService {
         CategoryDto categoryDto = categoryService.getById(event.getCategory());
 
         EventFullDto eventDto = eventMapper.toFullDto(event);
-        eventDto.setInitiator(new UserShortDto(users.getId(), users.getName()));
+
+        eventDto.setInitiator(new UserShortDto(users.getId(), users.getName())
+        );
+
         eventDto.setCategory(categoryDto);
-        Integer confirmRequests = eventRemoteService.getConfirmedCount(event.getInitiator(), event.getId());
-        eventDto.setConfirmedRequests(confirmRequests != null ? confirmRequests : 0);
+
+        Integer confirmRequests = eventRemoteService.getConfirmedCount(event.getInitiator(),
+                event.getId());
+
+        eventDto.setConfirmedRequests(
+                confirmRequests != null ? confirmRequests : 0
+        );
+
+        Double rating = analyzerClient
+                .getInteractionsCount(List.of(event.getId()))
+                .stream()
+                .findFirst()
+                .map(RecommendedEventProto::getScore)
+                .orElse(0.0);
+
+        eventDto.setRating(rating);
+
         return eventDto;
     }
 
     private List<EventFullDto> fillingFieldsInEventFullDtos(List<Event> events) {
+        if (events == null || events.isEmpty()) {
+            return Collections.emptyList();
+        }
+
         List<UserShortDto> users = eventRemoteService.getAllShortUsers();
         List<CategoryDto> categoryDtos = categoryService.getAll();
 
         Map<Long, CategoryDto> categoryMap = categoryDtos.stream()
-                .collect(Collectors.toMap(CategoryDto::getId, Function.identity()));
+                .collect(Collectors.toMap(
+                        CategoryDto::getId,
+                        Function.identity()
+                ));
 
         Map<Long, UserShortDto> userMap = users.stream()
-                .collect(Collectors.toMap(UserShortDto::getId, Function.identity()));
+                .collect(Collectors.toMap(
+                        UserShortDto::getId,
+                        Function.identity()
+                ));
 
         List<EventFullDto> eventFullDtos = eventMapper.toFullDtos(events);
 
@@ -529,7 +576,16 @@ public class EventService {
                 .map(Event::getId)
                 .toList();
 
-        HashMap<Long, Integer> participantLimitMapConfirm = eventRemoteService.getAllConfirmedParticipants(eventIds);
+        HashMap<Long, Integer> participantLimitMapConfirm =
+                eventRemoteService.getAllConfirmedParticipants(eventIds);
+
+        Map<Long, Double> ratings = analyzerClient
+                .getInteractionsCount(eventIds)
+                .stream()
+                .collect(Collectors.toMap(
+                        RecommendedEventProto::getEventId,
+                        RecommendedEventProto::getScore
+                ));
 
         for (int i = 0; i < events.size(); i++) {
             Event event = events.get(i);
@@ -538,11 +594,15 @@ public class EventService {
             if (event.getCategory() != null) {
                 dto.setCategory(categoryMap.get(event.getCategory()));
             }
+
             if (event.getInitiator() != null) {
                 dto.setInitiator(userMap.get(event.getInitiator()));
             }
+
             Integer count = participantLimitMapConfirm.get(event.getId());
             dto.setConfirmedRequests(count != null ? count : 0);
+
+            dto.setRating(ratings.getOrDefault(event.getId(), 0.0));
         }
 
         return eventFullDtos;
@@ -554,22 +614,37 @@ public class EventService {
         }
 
         List<UserShortDto> users = eventRemoteService.getAllShortUsers();
+
         List<CategoryDto> categoryDtos = categoryService.getAll();
 
         Map<Long, CategoryDto> categoryMap = categoryDtos.stream()
-                .collect(Collectors.toMap(CategoryDto::getId, Function.identity()));
+                        .collect(Collectors.toMap(
+                                CategoryDto::getId,
+                                Function.identity()
+                        ));
 
         Map<Long, UserShortDto> userMap = users.stream()
-                .collect(Collectors.toMap(UserShortDto::getId, Function.identity()));
+                        .collect(Collectors.toMap(
+                                UserShortDto::getId,
+                                Function.identity()
+                        ));
 
         List<EventShortDto> eventShortDtos = eventMapper.toShortDtos(events);
 
         List<Long> eventIds = events.stream()
-                .map(Event::getId)
-                .toList();
+                        .map(Event::getId)
+                        .toList();
 
         HashMap<Long, Integer> participantLimitMapConfirm =
                 eventRemoteService.getAllConfirmedParticipants(eventIds);
+
+        Map<Long, Double> ratings =
+                analyzerClient.getInteractionsCount(eventIds)
+                        .stream()
+                        .collect(Collectors.toMap(
+                                RecommendedEventProto::getEventId,
+                                RecommendedEventProto::getScore
+                        ));
 
         for (int i = 0; i < events.size(); i++) {
             Event event = events.get(i);
@@ -584,7 +659,10 @@ public class EventService {
             }
 
             Integer count = participantLimitMapConfirm.get(event.getId());
+
             dto.setConfirmedRequests(count != null ? count : 0);
+
+            dto.setRating(ratings.getOrDefault(event.getId(), 0.0));
         }
 
         return eventShortDtos;

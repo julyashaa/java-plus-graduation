@@ -18,10 +18,20 @@
         <module>stat-dto</module>
         <module>stats-server</module>
         <module>stat-client</module>
+        <module>collector</module>
+        <module>aggregator</module>
+        <module>analyzer</module>
+        <module>serialization</module>
     </modules>
 
     <properties>
         <java.version>21</java.version>
+        <protobuf.version>3.25.3</protobuf.version>
+        <grpc.version>1.63.0</grpc.version>
+        <grpc.spring.boot.version>3.1.0.RELEASE</grpc.spring.boot.version>
+        <avro.version>1.11.3</avro.version>
+        <kafka.version>3.7.0</kafka.version>
+        <mapstruct.version>1.5.5.Final</mapstruct.version>
     </properties>
 
     <dependencyManagement>

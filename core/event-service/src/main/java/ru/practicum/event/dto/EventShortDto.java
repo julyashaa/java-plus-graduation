@@ -39,5 +39,5 @@ public class EventShortDto {
 
     private Boolean paid;
 
-    private Long views;
+    private Double rating;
 }

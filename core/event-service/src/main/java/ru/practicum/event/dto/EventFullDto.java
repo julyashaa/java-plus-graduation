@@ -68,7 +68,7 @@ public class EventFullDto {
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = DATE_TIME_PATTERN)
     private LocalDateTime publishedOn;
 
-    private Long views;
+    private Double rating;
 
     private Boolean requestModeration;
 }

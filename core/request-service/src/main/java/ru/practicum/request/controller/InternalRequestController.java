@@ -49,4 +49,12 @@ public class InternalRequestController {
     ) {
         return requestService.getAllEventParticipiants(eventIds, RequestStatus.CONFIRMED);
     }
+
+    @GetMapping("/events/{eventId}/users/{userId}/confirmed")
+    public Boolean isUserConfirmedParticipant(
+            @PathVariable Long eventId,
+            @PathVariable Long userId
+    ) {
+        return requestService.isUserConfirmedParticipant(userId, eventId);
+    }
 }

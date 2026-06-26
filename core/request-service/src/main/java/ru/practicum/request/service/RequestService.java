@@ -3,11 +3,13 @@ package ru.practicum.request.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.practicum.client.collector.CollectorClient;
 import ru.practicum.event.dto.EventRequestInfoDto;
 import ru.practicum.event.enums.EventState;
 import ru.practicum.exception.ConditionsNotMetException;
 import ru.practicum.exception.ConflictException;
 import ru.practicum.exception.NotFoundException;
+import ru.practicum.grpc.stats.action.ActionTypeProto;
 import ru.practicum.request.dto.EventRequestStatusUpdateRequest;
 import ru.practicum.request.dto.EventRequestStatusUpdateResult;
 import ru.practicum.request.dto.ParticipationRequestDto;
@@ -28,6 +30,7 @@ public class RequestService {
     private final ParticipationRequestRepository requestRepository;
     private final RequestMapper requestMapper;
     private final RequestRemoteService requestRemoteService;
+    private final CollectorClient collectorClient;
 
     public List<ParticipationRequestDto> getUserRequests(Long userId) {
         ensureUserExists(userId);
@@ -74,6 +77,13 @@ public class RequestService {
                 .status(status)
                 .build();
         ParticipationRequest saved = requestRepository.save(request);
+
+        collectorClient.collectUserAction(
+                userId,
+                eventId,
+                ActionTypeProto.ACTION_REGISTER
+        );
+
         return requestMapper.toDto(saved);
     }
 
@@ -229,5 +239,16 @@ public class RequestService {
                 throw new NotFoundException("Request with id=" + id + " was not found");
             }
         }
+    }
+
+    public Boolean isUserConfirmedParticipant(Long userId, Long eventId) {
+        ensureUserExists(userId);
+        getEventOrThrow(eventId);
+
+        return requestRepository.existsByRequesterAndEventAndStatus(
+                userId,
+                eventId,
+                RequestStatus.CONFIRMED
+        );
     }
 }

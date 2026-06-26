@@ -1,17 +1,16 @@
 package ru.practicum.event.controller;
 
-import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
-import ru.practicum.client.StatClient;
-import ru.practicum.dto.EndpointHitDto;
+import ru.practicum.client.collector.CollectorClient;
 import ru.practicum.event.dto.EventFullDto;
 import ru.practicum.event.dto.EventShortDto;
 import ru.practicum.event.service.EventService;
+import ru.practicum.grpc.stats.action.ActionTypeProto;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 @Slf4j
@@ -20,18 +19,28 @@ import java.util.List;
 @RequiredArgsConstructor
 @RequestMapping("/events")
 public class PublicEventController {
+
+    private static final String USER_ID_HEADER = "X-EWM-USER-ID";
+
     private final EventService eventService;
-    private final StatClient statClient;
+    private final CollectorClient collectorClient;
 
     @GetMapping("/{id}")
-    public EventFullDto getEventById(@PathVariable Long id, HttpServletRequest request) {
-        sendStats(request);
+    public EventFullDto getEventById(
+            @PathVariable Long id,
+            @RequestHeader(USER_ID_HEADER) Long userId
+    ) {
+        collectorClient.collectUserAction(
+                userId,
+                id,
+                ActionTypeProto.ACTION_VIEW
+        );
+
         return eventService.getPublishedEventById(id);
     }
 
     @GetMapping
-    public List<EventShortDto> getEvents(
-            @RequestParam(required = false) String text,
+    public List<EventShortDto> getEvents(@RequestParam(required = false) String text,
             @RequestParam(required = false) List<Long> categories,
             @RequestParam(required = false) Boolean paid,
             @RequestParam(required = false) String rangeStart,
@@ -39,10 +48,7 @@ public class PublicEventController {
             @RequestParam(defaultValue = "false") Boolean onlyAvailable,
             @RequestParam(required = false) String sort,
             @RequestParam(defaultValue = "0") int from,
-            @RequestParam(defaultValue = "10") int size,
-            HttpServletRequest request
-    ) {
-        sendStats(request);
+            @RequestParam(defaultValue = "10") int size) {
         return eventService.getPublicEvents(
                 text,
                 categories,
@@ -56,20 +62,20 @@ public class PublicEventController {
         );
     }
 
-    private void sendStats(HttpServletRequest request) {
-        try {
-            EndpointHitDto hitDto = EndpointHitDto.builder()
-                    .app("ewm-main-service")
-                    .uri(request.getRequestURI())
-                    .ip(request.getRemoteAddr())
-                    .timestamp(LocalDateTime.now())
-                    .build();
+    @GetMapping("/recommendations")
+    public List<EventShortDto> getRecommendations(
+            @RequestHeader(USER_ID_HEADER) Long userId,
+            @RequestParam(defaultValue = "10") int maxResults
+    ) {
+        return eventService.getRecommendations(userId, maxResults);
+    }
 
-            log.info("SEND HIT TO STATS: {}", hitDto);
-            statClient.hit(hitDto);
-            log.info("HIT SENT SUCCESSFULLY: uri={}", hitDto.getUri());
-        } catch (Exception e) {
-            log.error("Ошибка при отправке статистики", e);
-        }
+    @PutMapping("/{eventId}/like")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void likeEvent(
+            @PathVariable Long eventId,
+            @RequestHeader(USER_ID_HEADER) Long userId
+    ) {
+        eventService.likeEvent(userId, eventId);
     }
 }
