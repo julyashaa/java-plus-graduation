@@ -15,7 +15,7 @@ import ru.practicum.grpc.stats.action.UserActionProto;
 public class UserActionServiceImpl implements UserActionService {
 
     private final UserActionMapper mapper;
-    private final KafkaTemplate<String, UserActionAvro> kafkaTemplate;
+    private final KafkaTemplate<Long, UserActionAvro> kafkaTemplate;
 
     @Value("${collector.kafka.topic.user-actions}")
     private String userActionsTopic;
@@ -26,7 +26,7 @@ public class UserActionServiceImpl implements UserActionService {
 
         kafkaTemplate.send(
                 userActionsTopic,
-                String.valueOf(avro.getUserId()),
+                avro.getUserId(),
                 avro
         );
 
