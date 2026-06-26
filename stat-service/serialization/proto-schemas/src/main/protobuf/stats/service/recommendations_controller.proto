@@ -1,9 +1,9 @@
 syntax = "proto3";
 
-package stats.service.analyzer;
+package stats.service.dashboard;
 
 option java_multiple_files = true;
-option java_package = "ru.practicum.grpc.stats.analyzer";
+option java_package = "ru.practicum.grpc.stats.dashboard";
 option java_outer_classname = "RecommendationsControllerProtoOuter";
 
 import "stats/recommendation/recommendations.proto";

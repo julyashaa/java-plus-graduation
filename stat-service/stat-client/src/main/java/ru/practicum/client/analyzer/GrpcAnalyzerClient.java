@@ -3,7 +3,7 @@ package ru.practicum.client.analyzer;
 import lombok.RequiredArgsConstructor;
 import net.devh.boot.grpc.client.inject.GrpcClient;
 import org.springframework.stereotype.Component;
-import ru.practicum.grpc.stats.analyzer.RecommendationsControllerGrpc;
+import ru.practicum.grpc.stats.dashboard.RecommendationsControllerGrpc;
 import ru.practicum.grpc.stats.recommendation.InteractionsCountRequestProto;
 import ru.practicum.grpc.stats.recommendation.RecommendedEventProto;
 import ru.practicum.grpc.stats.recommendation.SimilarEventsRequestProto;
