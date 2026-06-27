@@ -154,7 +154,7 @@ public class AnalyzerServiceImpl implements AnalyzerService {
         List<Long> eventIds = request.getEventIdList();
 
         Map<Long, Double> weightsByEventId = userActionRepository
-                .findByEventIdIn(eventIds)
+                .findByEventIds(eventIds)
                 .stream()
                 .collect(Collectors.groupingBy(
                         UserActionEntity::getEventId,

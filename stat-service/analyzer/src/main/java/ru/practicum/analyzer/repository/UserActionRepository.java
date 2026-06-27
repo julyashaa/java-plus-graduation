@@ -1,6 +1,8 @@
 package ru.practicum.analyzer.repository;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import ru.practicum.analyzer.model.UserActionEntity;
 
 import java.util.List;
@@ -14,5 +16,6 @@ public interface UserActionRepository extends JpaRepository<UserActionEntity, Lo
 
     List<UserActionEntity> findByEventId(Long eventId);
 
-    List<UserActionEntity> findByEventIdIn(List<Long> eventIds);
+    @Query("SELECT ua FROM UserActionEntity ua WHERE ua.eventId IN :eventIds")
+    List<UserActionEntity> findByEventIds(@Param("eventIds") List<Long> eventIds);
 }
