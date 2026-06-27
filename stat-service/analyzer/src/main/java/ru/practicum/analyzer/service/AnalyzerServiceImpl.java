@@ -2,6 +2,7 @@ package ru.practicum.analyzer.service;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import ru.practicum.analyzer.mapper.EventSimilarityMapper;
 import ru.practicum.analyzer.mapper.UserActionMapper;
 import ru.practicum.analyzer.model.EventSimilarityEntity;
@@ -32,6 +33,7 @@ public class AnalyzerServiceImpl implements AnalyzerService {
     private final EventSimilarityMapper eventSimilarityMapper;
 
     @Override
+    @Transactional
     public void process(UserActionAvro action) {
         double weight = ActionWeightResolver.resolve(action.getActionType());
 
@@ -52,6 +54,7 @@ public class AnalyzerServiceImpl implements AnalyzerService {
     }
 
     @Override
+    @Transactional
     public void process(EventSimilarityAvro similarity) {
         long eventA = Math.min(similarity.getEventA(), similarity.getEventB());
         long eventB = Math.max(similarity.getEventA(), similarity.getEventB());
@@ -73,9 +76,7 @@ public class AnalyzerServiceImpl implements AnalyzerService {
     }
 
     @Override
-    public List<RecommendedEventProto> getRecommendationsForUser(
-            UserPredictionsRequestProto request
-    ) {
+    public List<RecommendedEventProto> getRecommendationsForUser(UserPredictionsRequestProto request) {
         long userId = request.getUserId();
         int maxResults = request.getMaxResults();
 
@@ -89,61 +90,36 @@ public class AnalyzerServiceImpl implements AnalyzerService {
             return List.of();
         }
 
-        Set<Long> interactedEventIds = recentInteractions
-                .stream()
+        Set<Long> interactedEventIds = recentInteractions.stream()
                 .map(UserActionEntity::getEventId)
                 .collect(Collectors.toSet());
 
-        List<EventSimilarityEntity> candidateSimilarities = recentInteractions
-                .stream()
-                .flatMap(interaction -> eventSimilarityRepository
-                        .findByEventAOrEventB(
-                                interaction.getEventId(),
-                                interaction.getEventId()
-                        )
-                        .stream())
-                .filter(similarity -> {
-                    long candidateEventId = getOtherEventId(
-                            similarity,
-                            interactedEventIds
-                    );
-                    return candidateEventId != 0
-                            && !interactedEventIds.contains(candidateEventId);
-                })
-                .sorted(Comparator.comparingDouble(
-                        EventSimilarityEntity::getScore
-                ).reversed())
-                .limit(maxResults)
-                .toList();
+        List<EventSimilarityEntity> allSimilarities = eventSimilarityRepository
+                .findByEventAInOrEventBIn(interactedEventIds, interactedEventIds);
 
-        return candidateSimilarities
-                .stream()
-                .map(similarity -> {
-                    long candidateEventId = getOtherEventId(
-                            similarity,
-                            interactedEventIds
-                    );
+        Set<Long> candidateEventIds = allSimilarities.stream()
+                .map(similarity -> getOtherEventId(similarity, interactedEventIds))
+                .filter(eventId -> eventId != 0)
+                .filter(eventId -> !interactedEventIds.contains(eventId))
+                .collect(Collectors.toSet());
 
-                    return RecommendedEventProto.newBuilder()
-                            .setEventId(candidateEventId)
-                            .setScore(predictScore(
-                                    candidateEventId,
-                                    recentInteractions
-                            ))
-                            .build();
-                })
+        return candidateEventIds.stream()
+                .map(eventId -> RecommendedEventProto.newBuilder()
+                        .setEventId(eventId)
+                        .setScore(predictScore(
+                                eventId,
+                                recentInteractions,
+                                allSimilarities
+                        ))
+                        .build())
                 .filter(event -> event.getScore() > 0)
-                .sorted(Comparator.comparingDouble(
-                        RecommendedEventProto::getScore
-                ).reversed())
+                .sorted(Comparator.comparingDouble(RecommendedEventProto::getScore).reversed())
                 .limit(maxResults)
                 .toList();
     }
 
     @Override
-    public List<RecommendedEventProto> getSimilarEvents(
-            SimilarEventsRequestProto request
-    ) {
+    public List<RecommendedEventProto> getSimilarEvents(SimilarEventsRequestProto request) {
         long eventId = request.getEventId();
         long userId = request.getUserId();
         int maxResults = request.getMaxResults();
@@ -168,33 +144,34 @@ public class AnalyzerServiceImpl implements AnalyzerService {
                             .build();
                 })
                 .filter(event -> !interactedEventIds.contains(event.getEventId()))
-                .sorted(Comparator.comparingDouble(
-                        RecommendedEventProto::getScore
-                ).reversed())
+                .sorted(Comparator.comparingDouble(RecommendedEventProto::getScore).reversed())
                 .limit(maxResults)
                 .toList();
     }
 
     @Override
-    public List<RecommendedEventProto> getInteractionsCount(
-            InteractionsCountRequestProto request
-    ) {
-        return request.getEventIdList()
+    public List<RecommendedEventProto> getInteractionsCount(InteractionsCountRequestProto request) {
+        List<Long> eventIds = request.getEventIdList();
+
+        Map<Long, Double> weightsByEventId = userActionRepository
+                .findByEventIdIn(eventIds)
                 .stream()
+                .collect(Collectors.groupingBy(
+                        UserActionEntity::getEventId,
+                        Collectors.summingDouble(UserActionEntity::getWeight)
+                ));
+
+        return eventIds.stream()
                 .map(eventId -> RecommendedEventProto.newBuilder()
                         .setEventId(eventId)
-                        .setScore(userActionRepository.findByEventId(eventId)
-                                .stream()
-                                .mapToDouble(UserActionEntity::getWeight)
-                                .sum())
+                        .setScore(weightsByEventId.getOrDefault(eventId, 0.0))
                         .build())
                 .toList();
     }
 
-    private double predictScore(
-            long targetEventId,
-            List<UserActionEntity> userInteractions
-    ) {
+    private double predictScore(long targetEventId,
+            List<UserActionEntity> userInteractions,
+            List<EventSimilarityEntity> similarities) {
         Map<Long, UserActionEntity> interactionsByEventId = userInteractions
                 .stream()
                 .collect(Collectors.toMap(
@@ -203,17 +180,25 @@ public class AnalyzerServiceImpl implements AnalyzerService {
                         (first, second) -> first
                 ));
 
+        Map<Long, Double> similaritiesByInteractedEventId = similarities.stream()
+                .filter(similarity ->
+                        similarity.getEventA().equals(targetEventId)
+                                || similarity.getEventB().equals(targetEventId)
+                )
+                .collect(Collectors.toMap(
+                        similarity -> similarity.getEventA().equals(targetEventId)
+                                ? similarity.getEventB()
+                                : similarity.getEventA(),
+                        EventSimilarityEntity::getScore,
+                        Math::max
+                ));
+
         double weightedSum = 0.0;
         double similaritySum = 0.0;
 
         for (UserActionEntity interaction : interactionsByEventId.values()) {
-            double similarity = eventSimilarityRepository
-                    .findByEventAAndEventB(
-                            Math.min(targetEventId, interaction.getEventId()),
-                            Math.max(targetEventId, interaction.getEventId())
-                    )
-                    .map(EventSimilarityEntity::getScore)
-                    .orElse(0.0);
+            double similarity = similaritiesByInteractedEventId
+                    .getOrDefault(interaction.getEventId(), 0.0);
 
             if (similarity <= 0) {
                 continue;
@@ -226,10 +211,7 @@ public class AnalyzerServiceImpl implements AnalyzerService {
         return similaritySum == 0.0 ? 0.0 : weightedSum / similaritySum;
     }
 
-    private long getOtherEventId(
-            EventSimilarityEntity similarity,
-            Set<Long> eventIds
-    ) {
+    private long getOtherEventId(EventSimilarityEntity similarity, Set<Long> eventIds) {
         if (eventIds.contains(similarity.getEventA())) {
             return similarity.getEventB();
         }
