@@ -49,3 +49,11 @@ resilience4j:
       userService:
         maxAttempts: 3
         waitDuration: 500ms
+
+grpc:
+  client:
+    collector:
+      address: discovery:///collector
+      enableKeepAlive: true
+      keepAliveWithoutCalls: true
+      negotiationType: plaintext

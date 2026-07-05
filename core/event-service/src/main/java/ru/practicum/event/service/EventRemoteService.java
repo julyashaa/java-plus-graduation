@@ -64,4 +64,15 @@ public class EventRemoteService {
         log.warn("request-service недоступен. confirmedRequests=0 для событий {}", eventIds, throwable);
         return new HashMap<>();
     }
+
+    @Retry(name = "requestService")
+    @CircuitBreaker(name = "requestService", fallbackMethod = "isUserConfirmedParticipantFallback")
+    public Boolean isUserConfirmedParticipant(Long userId, Long eventId) {
+        return requestClient.isUserConfirmedParticipant(eventId, userId);
+    }
+
+    private Boolean isUserConfirmedParticipantFallback(Long userId, Long eventId, Throwable throwable) {
+        log.warn("request-service недоступен. Считаем, что пользователь не посещал eventId={}", eventId, throwable);
+        return false;
+    }
 }

@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package stats.service.collector;
+
+option java_multiple_files = true;
+option java_package = "ru.practicum.grpc.stats.collector";
+option java_outer_classname = "UserActionControllerProtoOuter";
+
+import "google/protobuf/empty.proto";
+import "stats/action/user_action.proto";
+
+service UserActionController {
+
+  rpc CollectUserAction(stats.action.UserActionProto)
+      returns (google.protobuf.Empty);
+
+}

@@ -1,0 +1,32 @@
+aggregator:
+  kafka:
+    topic:
+      user-actions: stats.user-actions.v1
+      events-similarity: stats.events-similarity.v1
+
+spring:
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: aggregator
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: ru.practicum.aggregator.kafka.UserActionAvroDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: ru.practicum.aggregator.kafka.EventSimilarityAvroSerializer
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  level:
+    ru.practicum.aggregator: DEBUG

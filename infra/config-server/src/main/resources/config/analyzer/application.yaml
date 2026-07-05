@@ -1,0 +1,45 @@
+analyzer:
+  kafka:
+    topic:
+      user-actions: stats.user-actions.v1
+      events-similarity: stats.events-similarity.v1
+
+grpc:
+  server:
+    port: 0
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5439/analyzer-db
+    username: analyzer
+    password: analyzer
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: analyzer
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  level:
+    ru.practicum.analyzer: DEBUG

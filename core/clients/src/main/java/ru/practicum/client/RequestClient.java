@@ -35,4 +35,10 @@ public interface RequestClient {
     HashMap<Long, Integer> getAllConfirmedParticipants(
             @RequestParam("eventIds") List<Long> eventIds
     );
+
+    @GetMapping("/internal/requests/events/{eventId}/users/{userId}/confirmed")
+    Boolean isUserConfirmedParticipant(
+            @PathVariable Long eventId,
+            @PathVariable Long userId
+    );
 }
